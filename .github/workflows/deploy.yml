@@ -14,9 +14,9 @@ jobs:
       - name: Install Docker via SSH
         env:
           # AQUI ESTABAN LOS ERRORES DE NOMBRE, LOS HE CORREGIDO:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY}}
+          HOST: ${{ secrets.EC2_HOST}}
+          USER: ${{ secrets.EC2_USER}}
         run: |
           # --- VALIDACIÓN DE SECRETOS ---
           if [ -z "$HOST" ]; then
@@ -87,9 +87,9 @@ jobs:
       - name: Deploy to EC2
         env:
           # CORRECCIÓN DE NOMBRES TAMBIÉN AQUÍ:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY}}
+          HOST: ${{ secrets.EC2_HOST}}
+          USER: ${{ secrets.EC2_USER}}
         run: |
           # --- VALIDACIÓN ---
           if [ -z "$HOST" ] || [ -z "$USER" ] || [ -z "$PRIVATE_KEY" ]; then
@@ -134,8 +134,8 @@ jobs:
       - name: Check HTTP Status
         run: |
           sleep 5
-          echo "Testeando conexión a http://${{ secrets.EC2_HOST }}..."
-          status_code=$(curl -o /dev/null -s -w "%{http_code}\n" http://${{ secrets.EC2_HOST }})
+          echo "Testeando conexión a http://${{ secrets.EC2_HOST}}..."
+          status_code=$(curl -o /dev/null -s -w "%{http_code}\n" http://${{secrets.EC2_HOST}})
           
           if [ "$status_code" -eq 200 ]; then
             echo " ÉXITO: El servidor responde."
