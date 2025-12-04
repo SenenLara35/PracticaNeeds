@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install Docker via SSH
         env:
-          PRIVATE_KEY: ${{ secrets.EC2_KEY }}
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
