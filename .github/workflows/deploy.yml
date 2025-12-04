@@ -35,17 +35,19 @@ jobs:
 
           echo "🔍 DIAGNÓSTICO: Intentando conectar a $HOST como usuario '$USER'..."
 
-          # 1. Crear el archivo de la clave privada (Usamos printf para respetar saltos de línea)
-          printf "%s\n" "$PRIVATE_KEY" > key.pem
+          # 1. Crear el archivo de la clave privada
+          # TRUCO: Usamos 'tr' para borrar caracteres extraños de Windows (\r) que suelen romper las llaves
+          echo "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
           # --- NUEVO: DIAGNÓSTICO DE LA LLAVE ---
           echo "🔍 DIAGNÓSTICO DE LLAVE:"
-          line_count=$(wc -l < key.pem)
-          echo "  - Líneas en la llave: $line_count"
-          echo "  - Primera línea: $(head -n 1 key.pem)"
-          if [ "$line_count" -lt 5 ]; then
-             echo "⚠️ ADVERTENCIA: La llave parece tener muy pocas líneas. Asegúrate de copiarla tal cual está en el archivo .pem."
+          # Esto intentará leer la llave y mostrar su huella digital. Si falla aquí, la llave está mal copiada.
+          if ssh-keygen -l -f key.pem; then
+             echo "✅ La llave tiene formato válido."
+          else
+             echo "❌ LA LLAVE NO ES VÁLIDA. Revisa que hayas copiado TODO el contenido, incluyendo BEGIN y END."
+             exit 1
           fi
           # -------------------------------------
           
@@ -97,8 +99,8 @@ jobs:
 
           echo "🔍 DIAGNÓSTICO: Desplegando en $HOST con usuario '$USER'..."
 
-          # 1. Preparar la clave
-          printf "%s\n" "$PRIVATE_KEY" > key.pem
+          # 1. Preparar la clave (Limpiando caracteres de Windows)
+          echo "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
           # 2. Crear carpeta destino
