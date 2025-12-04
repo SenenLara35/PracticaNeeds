@@ -138,8 +138,8 @@ jobs:
           status_code=$(curl -o /dev/null -s -w "%{http_code}\n" http://${{ secrets.EC2_HOST }})
           
           if [ "$status_code" -eq 200 ]; then
-            echo "✅ ÉXITO: El servidor responde."
+            echo " ÉXITO: El servidor responde."
           else
-            echo "❌ ERROR: Código $status_code"
+            echo " ERROR: Código $status_code"
             exit 1
           fi
