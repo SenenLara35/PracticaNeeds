@@ -17,36 +17,34 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          # --- LIMPIEZA Y VALIDACIÓN DE SECRETOS ---
-          # xargs elimina espacios en blanco al principio y al final (trim)
+          # --- LIMPIEZA Y VALIDACIÓN ---
+          # Eliminamos espacios en blanco invisibles
           CLEAN_HOST=$(echo "$HOST" | xargs)
           CLEAN_USER=$(echo "$USER" | xargs)
 
-          if [ -z "$CLEAN_HOST" ]; then
-            echo "❌ Error Crítico: El secreto 'EC2_HOST' está vacío."
+          if [ -z "$CLEAN_HOST" ] || [ -z "$CLEAN_USER" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "❌ Error Crítico: Faltan secretos."
             exit 1
           fi
-          if [ -z "$CLEAN_USER" ]; then
-            echo "❌ Error Crítico: El secreto 'EC2_USER' está vacío."
-            exit 1
-          fi
-          if [ -z "$PRIVATE_KEY" ]; then
-            echo "❌ Error Crítico: El secreto 'EC2_SSH_KEY' está vacío."
-            exit 1
-          fi
-          # ------------------------------
 
-          echo "🔍 DIAGNÓSTICO: Intentando conectar a $CLEAN_HOST..."
-          echo "🔍 Longitud del usuario: ${#CLEAN_USER} caracteres (Verifica si coincide con lo esperado)"
+          echo "🔍 DIAGNÓSTICO: Conectando a $CLEAN_HOST como '$CLEAN_USER'..."
 
-          # 1. Crear el archivo de la clave privada
-          echo "$PRIVATE_KEY" | tr -d '\r' > key.pem
+          # 1. Crear el archivo de la clave privada con precisión quirúrgica
+          # Usamos printf para evitar problemas de newlines que 'echo' a veces introduce
+          printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # 2. Conectar por SSH y ejecutar comandos
-          # Añadimos -o PubkeyAcceptedKeyTypes=+ssh-rsa para compatibilidad con Amazon Linux 2023
-          ssh -v -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
-            # Verificamos si es Amazon Linux
+          # 2. Verificación Visual (Sin mostrar la parte privada)
+          echo "🔍 VERIFICACIÓN DE ESTRUCTURA DE LLAVE:"
+          echo "  - Primera línea: $(head -n 1 key.pem)"
+          echo "  - Última línea:  $(tail -n 1 key.pem)"
+          
+          # 3. Conectar por SSH
+          # Quitamos flags forzados para permitir negociación automática moderna (SHA2-256/512)
+          ssh -v -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
+            echo "✅ ¡Conexión establecida con éxito!"
+            
+            # Verificamos sistema
             if [ -f /etc/system-release ]; then
                 cat /etc/system-release
             fi
@@ -67,7 +65,7 @@ jobs:
           
           rm key.pem
 
-  # TRABAJO 2: Copiar archivos y Desplegar (Usando SCP y SSH nativos)
+  # TRABAJO 2: Copiar archivos y Desplegar
   deploy-app:
     name: Build and Run Container
     runs-on: ubuntu-latest
@@ -82,33 +80,22 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          # --- LIMPIEZA ---
           CLEAN_HOST=$(echo "$HOST" | xargs)
           CLEAN_USER=$(echo "$USER" | xargs)
           
-          if [ -z "$CLEAN_HOST" ] || [ -z "$CLEAN_USER" ] || [ -z "$PRIVATE_KEY" ]; then
-             echo "❌ Error: Faltan secretos en GitHub."
-             exit 1
-          fi
-
-          echo "🔍 DIAGNÓSTICO: Desplegando en $CLEAN_HOST..."
-
           # 1. Preparar la clave
-          echo "$PRIVATE_KEY" | tr -d '\r' > key.pem
+          printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # 2. Crear carpeta destino (Usamos variables limpias)
-          # Añadimos flag de compatibilidad RSA también aquí
-          ssh -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem "$CLEAN_USER@$CLEAN_HOST" "mkdir -p /home/$CLEAN_USER/app"
+          # 2. Crear carpeta
+          ssh -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" "mkdir -p ~/app"
           
-          # 3. Copiar archivos con SCP (Usamos opciones SSH para compatibilidad)
-          scp -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem Dockerfile index.html "$CLEAN_USER@$CLEAN_HOST:/home/$CLEAN_USER/app/"
+          # 3. Copiar archivos
+          scp -o StrictHostKeyChecking=no -i key.pem Dockerfile index.html "$CLEAN_USER@$CLEAN_HOST:~/app/"
           
-          # 4. Construir y correr Docker remotamente
-          ssh -o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
-            # Aseguramos la ruta correcta dinámicamente o fija para ec2-user
+          # 4. Construir y correr
+          ssh -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
             cd ~/app
-            
             echo "Construyendo imagen..."
             sudo docker build -t mi-web-server .
             
