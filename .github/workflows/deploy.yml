@@ -15,9 +15,11 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          # USAMOS USUARIO FIJO PARA EVITAR ERRORES DE SECRETOS
+          username: ec2-user
           key: ${{ secrets.EC2_KEY_FINAL }}
           port: 22
+          debug: true # ACTIVA LOGS DETALLADOS
           # Script para Amazon Linux 2023
           script: |
             if ! command -v docker &> /dev/null; then
@@ -26,7 +28,7 @@ jobs:
                 sudo yum install -y docker
                 sudo service docker start
                 sudo systemctl enable docker
-                sudo usermod -aG docker ${{ secrets.EC2_USER }}
+                sudo usermod -aG docker ec2-user
             else
                 echo "✅ Docker ya está instalado."
             fi
@@ -44,19 +46,20 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ec2-user
           key: ${{ secrets.EC2_KEY_FINAL }}
           source: "Dockerfile,index.html"
-          target: "/home/${{ secrets.EC2_USER }}/app"
+          target: "/home/ec2-user/app"
 
       - name: Build and Run Docker
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ec2-user
           key: ${{ secrets.EC2_KEY_FINAL }}
+          debug: true
           script: |
-            cd /home/${{ secrets.EC2_USER }}/app
+            cd /home/ec2-user/app
             
             echo "🐳 Construyendo imagen..."
             sudo docker build -t mi-web-server .
