@@ -27,23 +27,26 @@ jobs:
             exit 1
           fi
 
-          # 2. VALIDACIÓN DE TIPO DE LLAVE (Anti-error común)
+          # 2. VALIDACIÓN DE TIPO DE LLAVE
           if [[ "$PRIVATE_KEY" != *"-----BEGIN"* ]]; then
              echo "❌ ERROR FATAL: El secreto EC2_SSH_KEY no parece una llave privada."
-             echo "   Actualmente empieza por: $(echo "$PRIVATE_KEY" | head -c 20)..."
-             echo "   Debe empezar por '-----BEGIN RSA PRIVATE KEY-----' (o similar)."
-             echo "   POSIBLE SOLUCIÓN: ¿Copiaste por error el contenido de la llave pública (.pub)?"
              exit 1
           fi
 
           echo "🔍 Conectando a $CLEAN_HOST con usuario '$CLEAN_USER'..."
 
-          # 3. Preparar la llave (printf conserva los saltos de línea vitales)
+          # 3. Preparar la llave
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
+          # --- DETECTOR DE HUELLAS (NUEVO) ---
+          echo "🔍 DIAGNÓSTICO DE LLAVE (COMPARAR CON AWS):"
+          echo "   La llave en GitHub tiene esta huella MD5:"
+          ssh-keygen -l -E md5 -f key.pem
+          echo "   👉 Ve a tu consola AWS -> Key Pairs y verifica que coincida con la columna 'Fingerprint'."
+          # -----------------------------------
+          
           # 4. Conectar por SSH
-          # Añadido '-o PubkeyAcceptedKeyTypes=+ssh-rsa' para máxima compatibilidad con Amazon Linux 2023
           ssh -v -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
             echo "✅ ¡Conexión establecida con éxito!"
             
@@ -89,7 +92,7 @@ jobs:
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # Crear carpeta (Con compatibilidad RSA forzada)
+          # Crear carpeta
           ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o PubkeyAcceptedKeyTypes=+ssh-rsa -i key.pem "$CLEAN_USER@$CLEAN_HOST" "mkdir -p ~/app"
           
           # Copiar archivos
