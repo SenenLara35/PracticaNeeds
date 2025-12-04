@@ -15,7 +15,7 @@ jobs:
         env:
           PRIVATE_KEY: ${{ secrets.EC2_KEY }}
           HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USERNAME }}
+          USER: ${{ secrets.EC2_USER }}
         run: |
           # --- VALIDACIÓN DE SECRETOS ---
           if [ -z "$HOST" ]; then
