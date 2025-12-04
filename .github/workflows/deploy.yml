@@ -13,7 +13,8 @@ jobs:
     steps:
       - name: Install Docker via SSH
         env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          # HEMOS CAMBIADO EL NOMBRE DEL SECRETO PARA FORZAR UNO NUEVO
+          PRIVATE_KEY: ${{ secrets.EC2_KEY_FINAL }}
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
@@ -29,7 +30,8 @@ jobs:
 
           # 2. VALIDACIÓN DE TIPO DE LLAVE
           if [[ "$PRIVATE_KEY" != *"-----BEGIN"* ]]; then
-             echo "❌ ERROR FATAL: El secreto EC2_SSH_KEY no parece una llave privada."
+             echo "❌ ERROR FATAL: El secreto EC2_KEY_FINAL no parece una llave privada o está vacío."
+             echo "   Asegúrate de haber creado el nuevo secreto 'EC2_KEY_FINAL' en GitHub."
              exit 1
           fi
 
@@ -39,13 +41,13 @@ jobs:
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # --- DETECTOR DE HUELLAS (MEJORADO) ---
-          echo "🔍 DIAGNÓSTICO DE LLAVE (COMPARAR CON AWS):"
-          echo "   La llave cargada en GitHub tiene estas huellas:"
-          echo "   - MD5:  $(ssh-keygen -l -E md5 -f key.pem | awk '{print $2}')"
-          echo "   - SHA1: $(ssh-keygen -l -E sha1 -f key.pem | awk '{print $2}')"
-          echo "   👉 En tu captura, la llave 'NeedsFinal' empieza por 'e0:f7:70...' (SHA1)."
-          echo "      Si la línea SHA1 de arriba no coincide, estás usando el archivo .pem incorrecto."
+          # --- DETECTOR DE HUELLAS ---
+          echo "🔍 DIAGNÓSTICO DE LLAVE (Confirmación final):"
+          echo "   - Tu llave en AWS (según captura) empieza por 'e0:f7...' (SHA1 en Hex)."
+          echo "   - La llave que acabamos de cargar tiene estas huellas:"
+          echo "     MD5:  $(ssh-keygen -l -E md5 -f key.pem | awk '{print $2}')"
+          # Convertimos a Hex para que puedas comparar visualmente con la consola de AWS
+          echo "     SHA1 (Hex): $(ssh-keygen -l -E sha1 -f key.pem | awk '{print $2}' | sed 's/SHA1://' | base64 -d 2>/dev/null | xxd -p | tr -d '\n' || echo "Error convirtiendo")"
           # -----------------------------------
           
           # 4. Conectar por SSH
@@ -84,7 +86,7 @@ jobs:
 
       - name: Deploy to EC2
         env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          PRIVATE_KEY: ${{ secrets.EC2_KEY_FINAL }}
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
