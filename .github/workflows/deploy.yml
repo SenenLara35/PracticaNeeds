@@ -18,30 +18,32 @@ jobs:
           USER: ${{ secrets.EC2_USER }}
         run: |
           # --- LIMPIEZA Y VALIDACIÓN ---
-          # Eliminamos espacios en blanco invisibles
           CLEAN_HOST=$(echo "$HOST" | xargs)
           CLEAN_USER=$(echo "$USER" | xargs)
 
-          if [ -z "$CLEAN_HOST" ] || [ -z "$CLEAN_USER" ] || [ -z "$PRIVATE_KEY" ]; then
-            echo "❌ Error Crítico: Faltan secretos."
+          # 1. Validar que tenemos IP y Usuario
+          if [ -z "$CLEAN_HOST" ] || [ -z "$CLEAN_USER" ]; then
+            echo "❌ Error Crítico: Faltan secretos de HOST o USER."
             exit 1
           fi
 
-          echo "🔍 DIAGNÓSTICO: Conectando a $CLEAN_HOST como '$CLEAN_USER'..."
+          # 2. VALIDACIÓN DE TIPO DE LLAVE (Anti-error común)
+          if [[ "$PRIVATE_KEY" != *"-----BEGIN"* ]]; then
+             echo "❌ ERROR FATAL: El secreto EC2_SSH_KEY no parece una llave privada."
+             echo "   Actualmente empieza por: $(echo "$PRIVATE_KEY" | head -c 20)..."
+             echo "   Debe empezar por '-----BEGIN RSA PRIVATE KEY-----' (o similar)."
+             echo "   POSIBLE SOLUCIÓN: ¿Copiaste por error el contenido de la llave pública (.pub)?"
+             exit 1
+          fi
 
-          # 1. Crear el archivo de la clave privada con precisión quirúrgica
-          # Usamos printf para evitar problemas de newlines que 'echo' a veces introduce
+          echo "🔍 Conectando a $CLEAN_HOST con usuario '$CLEAN_USER'..."
+
+          # 3. Preparar la llave (printf conserva los saltos de línea vitales)
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # 2. Verificación Visual (Sin mostrar la parte privada)
-          echo "🔍 VERIFICACIÓN DE ESTRUCTURA DE LLAVE:"
-          echo "  - Primera línea: $(head -n 1 key.pem)"
-          echo "  - Última línea:  $(tail -n 1 key.pem)"
-          
-          # 3. Conectar por SSH
-          # Quitamos flags forzados para permitir negociación automática moderna (SHA2-256/512)
-          ssh -v -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
+          # 4. Conectar por SSH (Modo 'IdentitiesOnly' para evitar rechazos por exceso de intentos)
+          ssh -v -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
             echo "✅ ¡Conexión establecida con éxito!"
             
             # Verificamos sistema
@@ -83,18 +85,17 @@ jobs:
           CLEAN_HOST=$(echo "$HOST" | xargs)
           CLEAN_USER=$(echo "$USER" | xargs)
           
-          # 1. Preparar la clave
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # 2. Crear carpeta
-          ssh -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" "mkdir -p ~/app"
+          # Crear carpeta (Con IdentitiesOnly)
+          ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i key.pem "$CLEAN_USER@$CLEAN_HOST" "mkdir -p ~/app"
           
-          # 3. Copiar archivos
-          scp -o StrictHostKeyChecking=no -i key.pem Dockerfile index.html "$CLEAN_USER@$CLEAN_HOST:~/app/"
+          # Copiar archivos
+          scp -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i key.pem Dockerfile index.html "$CLEAN_USER@$CLEAN_HOST:~/app/"
           
-          # 4. Construir y correr
-          ssh -o StrictHostKeyChecking=no -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
+          # Desplegar
+          ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i key.pem "$CLEAN_USER@$CLEAN_HOST" << 'EOF'
             cd ~/app
             echo "Construyendo imagen..."
             sudo docker build -t mi-web-server .
