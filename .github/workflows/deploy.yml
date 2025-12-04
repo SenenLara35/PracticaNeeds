@@ -1,0 +1,102 @@
+name: Deploy Web Server to EC2 (Native SSH)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # TRABAJO 1: Instalar Docker (Usando SSH nativo)
+  Docker:
+    name: Setup Docker on EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Docker via SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USERNAME }}
+        run: |
+          # 1. Crear el archivo de la clave privada
+          echo "$PRIVATE_KEY" > key.pem
+          chmod 600 key.pem
+          
+          # 2. Conectar por SSH y ejecutar comandos
+          # -o StrictHostKeyChecking=no: Evita el mensaje de "¿Confiar en este host?"
+          ssh -o StrictHostKeyChecking=no -i key.pem $USER@$HOST << 'EOF'
+            if ! command -v docker &> /dev/null; then
+                echo "Docker no encontrado. Instalando en Amazon Linux..."
+                sudo yum update -y
+                sudo yum install -y docker
+                sudo service docker start
+                sudo systemctl enable docker
+                sudo usermod -aG docker ec2-user
+                echo "Docker instalado."
+            else
+                echo "Docker ya está instalado."
+                sudo service docker start || true
+            fi
+          EOF
+          
+          # 3. Borrar la clave por seguridad (opcional, el runner se destruye igual)
+          rm key.pem
+
+  # TRABAJO 2: Copiar archivos y Desplegar (Usando SCP y SSH nativos)
+  CopiarHTML:
+    name: Build and Run Container
+    runs-on: ubuntu-latest
+    needs: Docker
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USERNAME }}
+        run: |
+          # 1. Preparar la clave
+          echo "$PRIVATE_KEY" > key.pem
+          chmod 600 key.pem
+          
+          # 2. Crear carpeta destino (por si no existe)
+          ssh -o StrictHostKeyChecking=no -i key.pem $USER@$HOST "mkdir -p /home/$USER/app"
+          
+          # 3. Copiar archivos con SCP (Secure Copy)
+          # Copiamos Dockerfile e index.html a la carpeta app
+          scp -o StrictHostKeyChecking=no -i key.pem Dockerfile index.html $USER@$HOST:/home/$USER/app/
+          
+          # 4. Construir y correr Docker remotamente
+          ssh -o StrictHostKeyChecking=no -i key.pem $USER@$HOST << 'EOF'
+            cd /home/ec2-user/app
+            
+            echo "Construyendo imagen..."
+            sudo docker build -t mi-web-server .
+            
+            echo "Reiniciando contenedor..."
+            sudo docker stop web-container || true
+            sudo docker rm web-container || true
+            sudo docker run -d -p 80:80 --name web-container mi-web-server
+          EOF
+          
+          rm key.pem
+
+  # TRABAJO 3: Test de Verificación (Igual que antes, curl es nativo)
+  Verificar:
+    name: HTTP Health Check
+    runs-on: ubuntu-latest
+    needs: CopiarHTML
+    steps:
+      - name: Check HTTP Status
+        run: |
+          sleep 5
+          echo "Testeando conexión a http://${{ secrets.EC2_HOST }}..."
+          status_code=$(curl -o /dev/null -s -w "%{http_code}\n" http://${{ secrets.EC2_HOST }})
+          
+          if [ "$status_code" -eq 200 ]; then
+            echo "El servidor responde."
+          else
+            echo "ERROR: Código $status_code"
+            exit 1
+          fi
