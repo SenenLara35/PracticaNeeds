@@ -39,8 +39,18 @@ jobs:
           printf "%s\n" "$PRIVATE_KEY" > key.pem
           chmod 600 key.pem
           
-          # 2. Conectar por SSH y ejecutar comandos
-          ssh -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" << 'EOF'
+          # --- NUEVO: DIAGNÓSTICO DE LA LLAVE ---
+          echo "🔍 DIAGNÓSTICO DE LLAVE:"
+          line_count=$(wc -l < key.pem)
+          echo "  - Líneas en la llave: $line_count"
+          echo "  - Primera línea: $(head -n 1 key.pem)"
+          if [ "$line_count" -lt 5 ]; then
+             echo "⚠️ ADVERTENCIA: La llave parece tener muy pocas líneas. Asegúrate de copiarla tal cual está en el archivo .pem."
+          fi
+          # -------------------------------------
+          
+          # 2. Conectar por SSH y ejecutar comandos (Añadido -v para ver detalles del error)
+          ssh -v -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" << 'EOF'
             # Verificamos si es Amazon Linux para usar los comandos correctos
             if [ -f /etc/system-release ] && grep -q "Amazon Linux" /etc/system-release; then
                 echo "✅ Detectado Amazon Linux."
@@ -92,13 +102,13 @@ jobs:
           chmod 600 key.pem
           
           # 2. Crear carpeta destino
-          ssh -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" "mkdir -p /home/$USER/app"
+          ssh -v -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" "mkdir -p /home/$USER/app"
           
           # 3. Copiar archivos con SCP
           scp -o StrictHostKeyChecking=no -i key.pem Dockerfile index.html "$USER@$HOST:/home/$USER/app/"
           
           # 4. Construir y correr Docker remotamente
-          ssh -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" << 'EOF'
+          ssh -v -o StrictHostKeyChecking=no -i key.pem "$USER@$HOST" << 'EOF'
             # Aseguramos la ruta correcta para ec2-user
             cd /home/ec2-user/app
             
