@@ -39,11 +39,13 @@ jobs:
           printf "%s\n" "$PRIVATE_KEY" | tr -d '\r' > key.pem
           chmod 600 key.pem
           
-          # --- DETECTOR DE HUELLAS (NUEVO) ---
+          # --- DETECTOR DE HUELLAS (MEJORADO) ---
           echo "🔍 DIAGNÓSTICO DE LLAVE (COMPARAR CON AWS):"
-          echo "   La llave en GitHub tiene esta huella MD5:"
-          ssh-keygen -l -E md5 -f key.pem
-          echo "   👉 Ve a tu consola AWS -> Key Pairs y verifica que coincida con la columna 'Fingerprint'."
+          echo "   La llave cargada en GitHub tiene estas huellas:"
+          echo "   - MD5:  $(ssh-keygen -l -E md5 -f key.pem | awk '{print $2}')"
+          echo "   - SHA1: $(ssh-keygen -l -E sha1 -f key.pem | awk '{print $2}')"
+          echo "   👉 En tu captura, la llave 'NeedsFinal' empieza por 'e0:f7:70...' (SHA1)."
+          echo "      Si la línea SHA1 de arriba no coincide, estás usando el archivo .pem incorrecto."
           # -----------------------------------
           
           # 4. Conectar por SSH
